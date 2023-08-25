@@ -9,6 +9,7 @@ This script benchmarks various deep learning models using different batch sizes 
 - `torchvision` 0.13.0
 - `requests`
 - `tqdm`
+- `memory_profiler`
 - `PIL` (Pillow)
 - Access to Hugging Face Datasets API
 
@@ -19,7 +20,7 @@ This script benchmarks various deep learning models using different batch sizes 
 2. Install the required dependencies using `pip`:
 
    ```bash
-   pip install torch==1.12.0 torchvision==0.13.0 requests tqdm pillow
+   pip install torch==1.12.0 torchvision==0.13.0 requests tqdm pillow memory_profiler
    ```
 3. Set up your Hugging Face API token as an environment variable named HF_API_TOKEN.
 4. Run the benchmarks script using the provided shell script:
