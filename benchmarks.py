@@ -18,6 +18,7 @@ from tqdm import tqdm
 import argparse
 import time
 import pandas as pd
+from memory_profiler import memory_usage
 from torchvision.models import resnet18, ResNet18_Weights, \
                                resnet34, ResNet34_Weights, \
                                resnet50, ResNet50_Weights, \
@@ -33,49 +34,59 @@ from torchvision.models import resnet18, ResNet18_Weights, \
                                googlenet, GoogLeNet_Weights
 
 
+accuracy = 0
+total_time = 0
+models_to_build_list = [
+    [resnet18, ResNet18_Weights],
+    [resnet34, ResNet34_Weights],
+    [resnet50, ResNet50_Weights],
+    [resnet101, ResNet101_Weights],
+    [resnet152, ResNet152_Weights],
+    [mobilenet_v2, MobileNet_V2_Weights],
+    [mobilenet_v3_small, MobileNet_V3_Small_Weights],
+    [mobilenet_v3_large, MobileNet_V3_Large_Weights],
+    [efficientnet_b0, EfficientNet_B0_Weights],
+    [efficientnet_b3, EfficientNet_B3_Weights],
+    [efficientnet_b7, EfficientNet_B7_Weights],
+    [inception_v3, Inception_V3_Weights],
+    [googlenet, GoogLeNet_Weights],
+]
 def main(args):
+    global accuracy
+    global total_time
+
+    def create_batches(images, labels, batch_size, preprocess, model, device):
+        batches = []
+        batch = []
+        for image, label in zip(images, labels):
+            image = preprocess(image).to(device)
+            batch.append((image, label))
+            if len(batch) == batch_size:
+                batches.append(batch)
+                batch = []
+
+        if len(batch) > 0:
+            batches.append(batch)
+
+        return batches
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Running on: {device}")
 
-    models_to_build_list = [
-        [resnet18, ResNet18_Weights],
-        [resnet34, ResNet34_Weights],
-        [resnet50, ResNet50_Weights],
-        [resnet101, ResNet101_Weights],
-        [resnet152, ResNet152_Weights],
-        [mobilenet_v2, MobileNet_V2_Weights],
-        [mobilenet_v3_small, MobileNet_V3_Small_Weights],
-        [mobilenet_v3_large, MobileNet_V3_Large_Weights],
-        [efficientnet_b0, EfficientNet_B0_Weights],
-        [efficientnet_b3, EfficientNet_B3_Weights],
-        [efficientnet_b7, EfficientNet_B7_Weights],
-        [inception_v3, Inception_V3_Weights],
-        [googlenet, GoogLeNet_Weights],
-    ]
-
-    weights_list = []
-    preprocess_list = []
-    models_list = []
-
-    for model_to_build in models_to_build_list:
-        try:
-            weights = model_to_build[1].IMAGENET1K_V2
-        except:
-            weights = model_to_build[1].IMAGENET1K_V1
-        preprocess = weights.transforms().to(device)
-        weights_list.append(weights)
-        preprocess_list.append(preprocess)
-        model = model_to_build[0](weights=weights).to(device)
-        model.eval()
-        models_list.append(model)
+    model_to_build = models_to_build_list[args.index]
+    try:
+        weights = model_to_build[1].IMAGENET1K_V2
+    except:
+        weights = model_to_build[1].IMAGENET1K_V1
+    preprocess = weights.transforms().to(device)
+    model = model_to_build[0](weights=weights).to(device)
+    model.eval()
 
     api_token = os.environ.get("HF_API_TOKEN")
 
     offset = 0
     headers = {"Authorization": f"Bearer {api_token}"}
     rows = []
-
 
     API_URL = f"https://datasets-server.huggingface.co/first-rows?dataset=imagenet-1k&config=default&split=validation"
     response = requests.get(API_URL, headers=headers)
@@ -129,16 +140,11 @@ def main(args):
 
     assert len(images) == len(labels)
 
-    df = pd.DataFrame({'model': [], 'acc': [], 'time': [], 'batch_size': []})
-
-    model = models_list[args.index]
-    preprocess = preprocess_list[args.index]
-
     batches = create_batches(images, labels, args.batch_size, preprocess, model, device)
 
+    start = time.time()
     with torch.no_grad():
         right = 0
-        start = time.time()
         for batch in tqdm(batches):
             x, y = zip(*batch)
 
@@ -152,28 +158,9 @@ def main(args):
                 if class_id[i] == y[i]:
                     right += 1
 
-        total_time = time.time() - start
-        accuracy = right/(len(images))
+    total_time = time.time() - start
+    accuracy = right/(len(images))
 
-        df = pd.concat([df, pd.DataFrame([{'model': str(args.index), 'acc': accuracy, 'time': total_time, 'batch_size': str(args.batch_size)}])], ignore_index=True)
-
-    with open("report.csv", "a") as f:
-        df.to_csv(f, header=False, index=False)
-
-def create_batches(images, labels, batch_size, preprocess, model, device):
-    batches = []
-    batch = []
-    for image, label in zip(images, labels):
-        image = preprocess(image).to(device)
-        batch.append((image, label))
-        if len(batch) == batch_size:
-            batches.append(batch)
-            batch = []
-
-    if len(batch) > 0:
-        batches.append(batch)
-
-    return batches
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Model index.')
@@ -182,5 +169,16 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=1,
                         help='Batch size')
     args = parser.parse_args()
-    main(args)
+    top_mem = memory_usage((main, (args,),), max_usage=True, interval=1, timeout=1000)
+
+    df = pd.DataFrame({'model': [], 'acc': [], 'time': [], 'batch_size': [], 'max_memory_usage': []})
+
+    df = pd.concat([df, pd.DataFrame([{'model': str(args.index), 
+                                       'acc': accuracy, 
+                                       'time': total_time, 
+                                       'batch_size': str(args.batch_size),
+                                       'max_memory_usage': top_mem}])], ignore_index=True)
+
+    with open("report2.csv", "a") as f:
+        df.to_csv(f, header=False, index=False)
 
