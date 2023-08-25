@@ -12,7 +12,6 @@ from tqdm import tqdm
 from io import BytesIO
 import os
 import torch
-import torchvision
 import requests
 from tqdm import tqdm
 import argparse
@@ -71,7 +70,6 @@ def main(args):
         return batches
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f"Running on: {device}")
 
     model_to_build = models_to_build_list[args.index]
     try:
@@ -145,7 +143,7 @@ def main(args):
     start = time.time()
     with torch.no_grad():
         right = 0
-        for batch in tqdm(batches):
+        for batch in batches:
             x, y = zip(*batch)
 
             x = torch.stack(x).to(device)
@@ -171,7 +169,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     top_mem = memory_usage((main, (args,),), max_usage=True, interval=1, timeout=1000)
 
-    df = pd.DataFrame({'model': [], 'acc': [], 'time': [], 'batch_size': [], 'max_memory_usage': []})
+    df = pd.DataFrame({'model': [], 'acc': [], 'time': [], 'batch_size': [], 'max_memory_usage': [], 'mean_power_consumption': []})
 
     df = pd.concat([df, pd.DataFrame([{'model': str(args.index), 
                                        'acc': accuracy, 
@@ -179,6 +177,6 @@ if __name__ == "__main__":
                                        'batch_size': str(args.batch_size),
                                        'max_memory_usage': top_mem}])], ignore_index=True)
 
-    with open("report2.csv", "a") as f:
+    with open("report3.csv", "a") as f:
         df.to_csv(f, header=False, index=False)
 
