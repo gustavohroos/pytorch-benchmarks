@@ -8,12 +8,10 @@ Original file is located at
 """
 
 from PIL import Image
-from tqdm import tqdm
 from io import BytesIO
 import os
 import torch
 import requests
-from tqdm import tqdm
 import argparse
 import time
 import pandas as pd
@@ -177,6 +175,9 @@ if __name__ == "__main__":
                                        'batch_size': str(args.batch_size),
                                        'max_memory_usage': top_mem}])], ignore_index=True)
 
-    with open("report3.csv", "a") as f:
-        df.to_csv(f, header=False, index=False)
+    if os.path.exists('results.csv'):
+        df = pd.concat([pd.read_csv('results.csv'), df], ignore_index=True)
+        pd.DataFrame(df).to_csv('results.csv', index=False)
+    else:
+        df.to_csv('results.csv', index=False)
 
