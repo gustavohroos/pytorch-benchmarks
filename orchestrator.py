@@ -3,6 +3,7 @@ import subprocess
 import threading
 import time
 import argparse
+import pandas as pd
 
 def watch_file(filename, consumption, stop_event):
     try:
@@ -35,19 +36,14 @@ def main(args):
             break
         time.sleep(0.5)
     
-    time.sleep(1)
+    time.sleep(3)
 
-    with open('report3.csv', 'r') as file:
-        lines = file.read()
 
     average = sum(consumption) / len(consumption)
-    last_line = lines[-1].strip()
 
-    with open('report3.csv', 'w') as file:
-        for line in lines[:-1]:
-            file.write(line)
-        
-        file.write(f"{last_line}{average}\n")
+    df = pd.read_csv('results.csv')
+    df.iloc[-1, -1] = average
+    df.to_csv('results.csv', index=False)
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
